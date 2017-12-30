@@ -7,16 +7,12 @@ out vec2 textureCoords;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
-
-//const vec4 plane = vec4(0, -1, 0, 0);
 uniform vec4 plane;
 
 void main()
 {
+    vec4 worldPos = model * vec4(aPos, 1.0);
+    gl_ClipDistance[0] = dot(worldPos, plane);
     gl_Position = projection * view * model * vec4(aPos, 1.0);
-
-	//gl_ClipDistance[0] = dot(gl_Position, plane);
-	gl_ClipDistance[0] = dot(vec4(aPos, 1.0), plane);
-
     textureCoords = aTexCoord;
 }
