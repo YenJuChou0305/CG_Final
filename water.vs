@@ -3,18 +3,22 @@ layout (location = 0) in vec2 position; // only need to pass vec2 since y is set
 
 out vec4 clipSpace;
 out vec2 textureCoords;
+out vec3 toCameraVector;
 
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform vec3 cameraPosition;
 
 const float tiling = 6.0;
 
 void main(void) 
 {
     
+	vec4 worldPosition = model * vec4(position.x, 0.0, position.y, 1.0);
     clipSpace = projection * view * model * vec4(position.x, 0.0, position.y, 1.0);
     gl_Position = clipSpace;
 	textureCoords = vec2(position.x/2 + 0.5, position.y/2 + 0.5) * tiling;
+	toCameraVector = cameraPosition - worldPosition.xyz;
     
 }

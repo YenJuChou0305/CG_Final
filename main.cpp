@@ -51,7 +51,8 @@ unsigned int texture1, texture2;
 
 unsigned int DuDvTexture;
 unsigned int dudvMap;
-float wave_speed = 0.0005f;
+//float wave_speed = 0.0005f;
+float wave_speed = 0.01f;
 float moveFactor = 0;
 
 
@@ -351,12 +352,18 @@ int main()
 		waterShader.setInt("reflectionTexture", 0);
 		waterShader.setInt("refractionTexture", 1);
 		waterShader.setInt("DuDvTexture", 2);
+		// Fresnel Effect : pass camera position 
+		glm::vec3 cameraPos = camera.Position;
+		GLuint cameraPosition_loc = glGetUniformLocation(waterShader.ID, "cameraPosition");
+		glUniform3fv(cameraPosition_loc, 1, glm::value_ptr(cameraPos));
+		
+		
 		moveFactor += wave_speed * currentFrame;
 		//moveFactor %= 1;
 		if (moveFactor >= 1)
 			moveFactor -= 1;
 		waterShader.setFloat("moveFactor", moveFactor);
-		std::cout << moveFactor << std::endl;
+		//std::cout << moveFactor << std::endl;
 
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, reflectionColorBuffer);
