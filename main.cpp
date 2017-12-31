@@ -22,6 +22,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 //void renderScene(Shader wallShader, unsigned int wallVAO, float clipPlane[4]);
 void renderScene(Shader wallShader, float clipPlane[4]);
+void light_source(void); 
+
 unsigned int initializeReflectionFBO();
 unsigned int initializeRefractionFBO();
 
@@ -30,7 +32,8 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+//Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(glm::vec3(0.0f, 1.0f, 5.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -51,9 +54,17 @@ unsigned int texture1, texture2;
 
 unsigned int DuDvTexture;
 unsigned int dudvMap;
+
+unsigned int normalTexture;
+unsigned int normalMap;
+
 //float wave_speed = 0.0005f;
 float wave_speed = 0.01f;
 float moveFactor = 0;
+
+// lighting
+glm::vec3 lightPos(0, 3, 0);
+glm::vec3 light_Color(1, 1, 1);
 
 
 int main()
@@ -288,6 +299,30 @@ int main()
 	}
 	stbi_image_free(data);
 
+	// load normal texture 
+	glGenTextures(1, &normalTexture);
+	glBindTexture(GL_TEXTURE_2D, normalTexture);
+	// set the texture wrapping parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);    // set texture wrapping to GL_REPEAT (default wrapping method)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// set texture filtering parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	// load image, create texture and generate mipmaps
+	stbi_set_flip_vertically_on_load(true); // tell stb_image.h to flip loaded texture's on the y-axis.
+	//data = stbi_load("../textures/normalMap.png", &width, &height, &nrChannels, 0);
+	data = stbi_load("../textures/matchingNormalMap.png", &width, &height, &nrChannels, 0);
+	if (data)
+	{
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	else
+	{
+		std::cout << "Failed to load normal texture" << std::endl;
+	}
+	stbi_image_free(data);
+
 
 	// ------------ shader configuration ---------------
 	wallShader.use();
@@ -352,12 +387,21 @@ int main()
 		waterShader.setInt("reflectionTexture", 0);
 		waterShader.setInt("refractionTexture", 1);
 		waterShader.setInt("DuDvTexture", 2);
-		// Fresnel Effect : pass camera position 
+		waterShader.setInt("normalTexture", 3);
+
+		// pass camera position 
 		glm::vec3 cameraPos = camera.Position;
 		GLuint cameraPosition_loc = glGetUniformLocation(waterShader.ID, "cameraPosition");
 		glUniform3fv(cameraPosition_loc, 1, glm::value_ptr(cameraPos));
+		// pass light position 
+		GLuint lightPosition_loc = glGetUniformLocation(waterShader.ID, "lightPosition");
+		glUniform3fv(lightPosition_loc, 1, glm::value_ptr(lightPos));
+		// pass light position 
+		GLuint lightColor_loc = glGetUniformLocation(waterShader.ID, "lightColour");
+		glUniform3fv(lightColor_loc, 1, glm::value_ptr(light_Color));
+
 		
-		
+		// wave 
 		moveFactor += wave_speed * currentFrame;
 		//moveFactor %= 1;
 		if (moveFactor >= 1)
@@ -371,6 +415,9 @@ int main()
 		glBindTexture(GL_TEXTURE_2D, refractionColorBuffer);
 		glActiveTexture(GL_TEXTURE2);
 		glBindTexture(GL_TEXTURE_2D, dudvMap);
+		glActiveTexture(GL_TEXTURE2);
+		glBindTexture(GL_TEXTURE_2D, normalMap);
+
 		glBindVertexArray(waterVAO);
 
 		// do transformations
@@ -383,6 +430,9 @@ int main()
 		glm::mat4 model = glm::mat4(1.0f);
 		waterShader.setMat4("model", model);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		// draw a small cube representing a light source 
+		light_source();
 
 
 		// ------------------ 2nd pass ---------------
@@ -506,6 +556,88 @@ void renderScene(Shader wallShader, float clipPlane[4])
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture2); // floor texture
 	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+}
+
+void light_source()
+{
+	Shader lightingShader("./lightingShader.vs", "./lightingShader.frag");
+	
+	float vertices[] = {
+		-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+		0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+		0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+		0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+		-0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+		-0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+
+		-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+		0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+		0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+		0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+		-0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+		-0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+
+		-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+		-0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+		-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+		-0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+		-0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+		-0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+		0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+		0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+		0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+		0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+		0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+		0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+		-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+		0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+		0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+		0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+		-0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+		-0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+		-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+		0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+		0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+		0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+		-0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+		-0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+	};
+
+	// first, configure the cube's VAO (and VBO)
+	unsigned int VBO, cubeVAO;
+	glGenVertexArrays(1, &cubeVAO);
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindVertexArray(cubeVAO);
+	// position attribute
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	
+	// be sure to activate shader when setting uniforms/drawing objects
+	lightingShader.use();
+
+	// transformations
+	glm::mat4 projection;
+	projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+	lightingShader.setMat4("projection", projection);
+	glm::mat4 view = camera.GetViewMatrix();
+	lightingShader.setMat4("view", view);
+	glm::mat4 model;
+	lightingShader.setMat4("model", model);
+	model = glm::mat4();
+	model = glm::translate(model, lightPos);
+	model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
+	lightingShader.setMat4("model", model);
+
+	// render the cube
+	glBindVertexArray(cubeVAO);
+	glDrawArrays(GL_TRIANGLES, 0, 36);
+	
 
 }
 
